@@ -3,7 +3,7 @@ name: CI / CD - Build and Deploy to IIS (Windows Server)
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -12,49 +12,31 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # ------------------------------
-    # CHECKOUT REPO
-    # ------------------------------
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # Checkout source code
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    # ------------------------------
-    # SETUP .NET 8 SDK
-    # ------------------------------
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+      # Setup .NET SDK
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-    # ------------------------------
-    # RESTORE PACKAGES
-    # ------------------------------
-    - name: Restore dependencies
-      run: dotnet restore
+      # Restore
+      - name: Restore
+        run: dotnet restore ./API/Orphanage.API.csproj
 
-    # ------------------------------
-    # PUBLISH USING YOUR pubxml
-    # (FolderProfile.pubxml)
-    # ------------------------------
-    - name: Publish API using pubxml
-      run: dotnet publish ./Orphanage.API/Orphanage.API.csproj /p:PublishProfile=FolderProfile /p:Configuration=Release
+      # Publish API (Release)
+      - name: Publish API
+        run: |
+          dotnet publish ./API/Orphanage.API.csproj -c Release -r win-x64 --self-contained false -o ./publish
 
-    # ------------------------------
-    # ZIP THE PUBLISH OUTPUT
-    # ------------------------------
-    - name: Zip published files
-      run: |
-        powershell Compress-Archive `
-          -Path Orphanage.API/bin/Release/net8.0/win-x64/publish/* `
-          -DestinationPath publish.zip -Force
+      # Zip published output
+      - name: Archive published files
+        run: |
+          powershell -Command "Compress-Archive -Path publish\* -DestinationPath artifact.zip -Force"
 
-    # ------------------------------
-    # DEPLOY TO IIS USING WEB DEPLOY
-    # ------------------------------
-    - name: Deploy to IIS Server
-      run: |
-        "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe" ^
-          -source:package="publish.zip" ^
-          -dest:auto,computerName="https://192.168.1.2:8172/msdeploy.axd?site=OrphanageManagement-Backend",username="GANESH1708\Ganesh",password="Ganesh@1712",authtype="Basic" ^
-          -verb:sync ^
-          -allowUntrusted
+      # Deploy to IIS server
+      - name: Deploy to IIS via Web Deploy
+        run: |
+          powershell -Command "& 'C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe' -verb:sync -source:package='artifact.zip' -dest:auto,computerName='https://192.168.1.2:8172/msdeploy.axd?site=OrphanageManagement-Backend',userName='GANESH1708\Ganesh',password='Ganesh@1712',authType='Basic' -allowUntrusted"
