@@ -1,0 +1,60 @@
+name: CI / CD - Build and Deploy to IIS (Windows Server)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Deploy API
+    runs-on: windows-latest
+
+    steps:
+    # ------------------------------
+    # CHECKOUT REPO
+    # ------------------------------
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # ------------------------------
+    # SETUP .NET 8 SDK
+    # ------------------------------
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    # ------------------------------
+    # RESTORE PACKAGES
+    # ------------------------------
+    - name: Restore dependencies
+      run: dotnet restore
+
+    # ------------------------------
+    # PUBLISH USING YOUR pubxml
+    # (FolderProfile.pubxml)
+    # ------------------------------
+    - name: Publish API using pubxml
+      run: dotnet publish ./Orphanage.API/Orphanage.API.csproj /p:PublishProfile=FolderProfile /p:Configuration=Release
+
+    # ------------------------------
+    # ZIP THE PUBLISH OUTPUT
+    # ------------------------------
+    - name: Zip published files
+      run: |
+        powershell Compress-Archive `
+          -Path Orphanage.API/bin/Release/net8.0/win-x64/publish/* `
+          -DestinationPath publish.zip -Force
+
+    # ------------------------------
+    # DEPLOY TO IIS USING WEB DEPLOY
+    # ------------------------------
+    - name: Deploy to IIS Server
+      run: |
+        "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe" ^
+          -source:package="publish.zip" ^
+          -dest:auto,computerName="https://192.168.1.2:8172/msdeploy.axd?site=OrphanageManagement-Backend",username="GANESH1708\Ganesh",password="Ganesh@1712",authtype="Basic" ^
+          -verb:sync ^
+          -allowUntrusted
